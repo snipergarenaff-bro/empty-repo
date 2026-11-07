@@ -19,16 +19,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Install Gradle 8.7
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
+          unzip -q gradle.zip -d $HOME/gradle-install
+          export PATH=$HOME/gradle-install/gradle-8.7/bin:$PATH
+          echo "GRADLE_HOME=$HOME/gradle-install/gradle-8.7" >> $GITHUB_ENV
+          echo "$HOME/gradle-install/gradle-8.7/bin" >> $GITHUB_PATH
+          gradle --version
+
       - name: Download zip from repo
         run: |
           curl -L "https://github.com/snipergarenaff-bro/empty-repo/raw/master/TiktokFixer.zip" -o TiktokFixer.zip
-          echo "Download done"
           ls -lh TiktokFixer.zip
 
       - name: Extract zip
         run: |
           unzip -o TiktokFixer.zip -d extracted/
-          echo "Extracted:"
           ls extracted/
 
       - name: Locate project root
@@ -41,14 +48,14 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Install build tools
+      - name: Install Android platform
         run: |
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: Build APK
         run: |
           cd ${{ env.PROJECT_DIR }}
-          gradle assembleDebug --no-daemon
+          gradle assembleDebug --no-daemon --warning-mode none
 
       - name: Find APK
         run: |
