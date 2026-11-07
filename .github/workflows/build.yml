@@ -19,53 +19,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install Gradle 8.7
+      - name: Check if zip exists and extract
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O gradle.zip
-          unzip -q gradle.zip -d $HOME/gradle-install
-          export PATH=$HOME/gradle-install/gradle-8.7/bin:$PATH
-          echo "GRADLE_HOME=$HOME/gradle-install/gradle-8.7" >> $GITHUB_ENV
-          echo "$HOME/gradle-install/gradle-8.7/bin" >> $GITHUB_PATH
-          gradle --version
+          if [ -f "TikTokFixer.zip" ]; then
+            echo "ZIP found, extracting..."
+            unzip -o TikTokFixer.zip
+            echo "Extracted OK"
+          else
+            echo "No zip found, using repo files directly"
+          fi
 
-      - name: Download zip from repo
+      - name: Grant gradlew permission
         run: |
-          curl -L "https://github.com/snipergarenaff-bro/empty-repo/raw/master/TiktokFixer.zip" -o TiktokFixer.zip
-          ls -lh TiktokFixer.zip
+          if [ -f "TikTokFixer/gradlew" ]; then
+            chmod +x TikTokFixer/gradlew
+          fi
 
-      - name: Extract zip
+      - name: Build with Gradle
         run: |
-          unzip -o TiktokFixer.zip -d extracted/
-          ls extracted/
-
-      - name: Locate project root
-        run: |
-          PROJECT=$(find extracted/ -name "build.gradle" -not -path "*/app/*" | head -1 | xargs dirname)
-          echo "PROJECT_DIR=$PROJECT" >> $GITHUB_ENV
-          echo "Project root: $PROJECT"
-
-      - name: Accept SDK licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Install Android platform
-        run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Build APK
-        run: |
-          cd ${{ env.PROJECT_DIR }}
-          gradle assembleDebug --no-daemon --warning-mode none
-
-      - name: Find APK
-        run: |
-          APK=$(find ${{ env.PROJECT_DIR }} -name "*.apk" | head -1)
-          echo "APK_PATH=$APK" >> $GITHUB_ENV
-          echo "APK: $APK"
+          cd TikTokFixer
+          if [ -f "gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon
+          else
+            gradle assembleDebug --no-daemon
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TikTokFixer-APK
-          path: ${{ env.APK_PATH }}
+          path: TikTokFixer/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
