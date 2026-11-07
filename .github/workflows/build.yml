@@ -13,12 +13,22 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Find and extract zip
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download zip from repo
         run: |
-          ZIP=$(find . -maxdepth 2 -name "*.zip" | head -1)
-          echo "Found zip: $ZIP"
-          unzip -o "$ZIP" -d extracted/
-          echo "Contents after extract:"
+          curl -L "https://github.com/snipergarenaff-bro/empty-repo/raw/master/TiktokFixer.zip" -o TiktokFixer.zip
+          echo "Download done"
+          ls -lh TiktokFixer.zip
+
+      - name: Extract zip
+        run: |
+          unzip -o TiktokFixer.zip -d extracted/
+          echo "Extracted:"
           ls extracted/
 
       - name: Locate project root
@@ -27,17 +37,13 @@ jobs:
           echo "PROJECT_DIR=$PROJECT" >> $GITHUB_ENV
           echo "Project root: $PROJECT"
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+      - name: Accept SDK licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses || true
+      - name: Install build tools
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
       - name: Build APK
         run: |
@@ -48,9 +54,9 @@ jobs:
         run: |
           APK=$(find ${{ env.PROJECT_DIR }} -name "*.apk" | head -1)
           echo "APK_PATH=$APK" >> $GITHUB_ENV
-          echo "APK found: $APK"
+          echo "APK: $APK"
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TikTokFixer-APK
