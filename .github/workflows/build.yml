@@ -29,6 +29,11 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
+      - name: Patch repositories to include JitPack
+        run: |
+          # Add jitpack to settings.gradle dependency resolution
+          sed -i 's|mavenCentral()|mavenCentral()\n            maven { url "https://jitpack.io" }|g' settings.gradle
+
       - name: Grant gradlew execute permission
         run: chmod +x gradlew
 
