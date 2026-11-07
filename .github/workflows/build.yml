@@ -16,7 +16,7 @@ jobs:
       - name: Extract source zip
         run: |
           unzip tiktok-fixer.zip -d source
-          mv source/tiktok-fixer/* .
+          mv source/* .
           rm -rf source
 
       - name: Set up JDK 11
