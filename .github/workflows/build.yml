@@ -1,4 +1,4 @@
-name: Linux Distro
+name: Build Apk
 
 on:
   workflow_dispatch:
