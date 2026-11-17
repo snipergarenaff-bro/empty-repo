@@ -1,46 +1,271 @@
-name: Build TikTok Fixer APK
+name: Linux Distro
 
 on:
-  push:
-    branches: [ master ]
   workflow_dispatch:
+    inputs:
+      os:
+        description: Select Distribution
+        required: true
+        type: choice
+        default: Debian
+        options:
+          - Debian
+          - Ubuntu
+          - Both
+      sshx:
+        description: Enable SSHX Link Output
+        required: true
+        type: choice
+        default: 'No'
+        options:
+          - 'Yes'
+          - 'No'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  Debian:
+    if: ${{ inputs.os == 'Debian' || inputs.os == 'Both' }}
+    runs-on: ubuntu-26.04
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Extract source zip
+      - name: Initialize Debian
         run: |
-          unzip tiktok-fixer.zip -d source
-          mv source/* .
-          rm -rf source
+          sudo modprobe tun || true
 
-      - name: Download Xposed API jar
+          if [ ! -c /dev/net/tun ]; then
+            sudo mkdir -p /dev/net
+            sudo mknod /dev/net/tun c 10 200
+            sudo chmod 600 /dev/net/tun
+          fi
+
+          docker pull debian:13
+
+          docker run -d \
+            --name debian \
+            --hostname debian \
+            --cap-add=NET_ADMIN \
+            --cap-add=NET_RAW \
+            --device=/dev/net/tun:/dev/net/tun \
+            --sysctl net.ipv4.ip_forward=1 \
+            --sysctl net.ipv6.conf.all.forwarding=1 \
+            debian:13 \
+            sleep infinity
+
+          docker exec debian bash -c '
+            apt-get update
+
+            apt-get install -y \
+              sudo \
+              ca-certificates \
+              curl \
+              git \
+              openssh-server \
+              fastfetch \
+              procps \
+              util-linux \
+              hostname \
+              gcc \
+              clang \
+              make \
+              ncurses-bin \
+              iptables \
+              iproute2
+          '
+
+          docker exec -i debian bash <<'EOF'
+
+          echo "root:root" | chpasswd
+
+          sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+          echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+          echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+          ssh-keygen -A
+
+          mkdir -p /run/sshd
+          sshd -t
+          /usr/sbin/sshd
+
+          cat >> /root/.bashrc <<'BASH'
+
+          PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]debian\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
+
+          cd
+
+          if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
+              fastfetch
+          fi
+          BASH
+
+          cat > /usr/local/bin/clear <<'BASH'
+          #!/bin/bash
+          /usr/bin/clear
+          fastfetch
+          BASH
+
+          chmod +x /usr/local/bin/clear
+
+          EOF
+
+          docker exec debian bash -c '
+            curl -fsSL https://tailscale.com/install.sh | sh
+          '
+
+          docker exec debian bash -c '
+            mkdir -p /var/lib/tailscale
+            mkdir -p /var/run/tailscale
+
+            nohup /usr/sbin/tailscaled \
+              --state=/var/lib/tailscale/tailscaled.state \
+              --socket=/var/run/tailscale/tailscaled.sock \
+              > /var/log/tailscaled.log 2>&1 &
+
+            for i in $(seq 1 30); do
+              if [ -S /var/run/tailscale/tailscaled.sock ]; then
+                break
+              fi
+              sleep 1
+            done
+
+            test -S /var/run/tailscale/tailscaled.sock
+          '
+
+          docker exec \
+            -e TAILSCALE_AUTH_KEY="${{ secrets.TAILSCALE_AUTH_KEY }}" \
+            debian bash -c '
+              tailscale --socket=/var/run/tailscale/tailscaled.sock up \
+                --auth-key="$TAILSCALE_AUTH_KEY" \
+                --advertise-exit-node
+
+              tailscale --socket=/var/run/tailscale/tailscaled.sock set --ssh
+            '
+
+          docker exec debian bash -c '
+            curl -L --fail --output /tmp/cloudflared \
+              https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+
+            install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+
+            cloudflared --version
+          '
+
+          docker exec \
+            -e CLOUDFLARED_TUNNEL_TOKEN="${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}" \
+            debian bash -c '
+              nohup cloudflared tunnel \
+                --no-autoupdate \
+                run \
+                --token "$CLOUDFLARED_TUNNEL_TOKEN" \
+                > /var/log/cloudflared.log 2>&1 &
+            '
+
+          docker exec debian bash -c '
+            echo "========== TAILSCALE STATUS =========="
+            tailscale status
+
+            echo ""
+            echo "========== TAILSCALE IP =========="
+            tailscale ip -4
+
+            echo ""
+            echo "========== EXIT NODE CONFIGURATION =========="
+            tailscale debug prefs
+
+            echo ""
+            echo "========== CLOUDFLARED PROCESS =========="
+            pgrep -a cloudflared || true
+
+            echo ""
+            echo "========== SSH PROCESS =========="
+            pgrep -a sshd || true
+          '
+
+      - name: Debian Running
         run: |
-          curl -L "https://github.com/rovo89/XposedBridge/releases/download/art/XposedBridgeApi-82.jar" \
-            -o app/libs/XposedBridgeApi-82.jar
+          if [ "${{ inputs.sshx }}" = "Yes" ]; then
+            set -o pipefail
 
-      - name: Grant gradlew execute permission
-        run: chmod +x gradlew
+            docker exec debian bash -lc \
+              'curl -sSf https://sshx.io/get | sh -s run' 2>&1 |
+              grep --line-buffered -oE 'https://sshx\.io/s/[A-Za-z0-9]+(#[A-Za-z0-9]+)?'
+          else
+            docker exec debian bash -lc \
+              'curl -sSf https://sshx.io/get | sh -s run' \
+              >/dev/null 2>&1
+          fi
 
-      - name: Build release APK
-        run: ./gradlew assembleRelease --no-daemon
+  Ubuntu:
+    if: ${{ inputs.os == 'Ubuntu' || inputs.os == 'Both' }}
+    runs-on: ubuntu-26.04
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tiktok-fixer-release
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
+    steps:
+      - name: Initialize Ubuntu
+        run: |
+          echo "root:root" | sudo chpasswd
+
+          sudo hostnamectl set-hostname ubuntu
+
+          sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+          echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config
+          echo "PasswordAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
+
+          sudo service ssh restart
+
+          echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
+
+          sudo tee -a /root/.bashrc > /dev/null <<'EOF'
+
+          PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]ubuntu\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
+          EOF
+
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+          sudo tailscale up \
+            --auth-key="${{ secrets.TAILSCALE_AUTH_KEY }}" \
+            --advertise-exit-node
+
+          curl -L --output cloudflared.deb \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+
+          sudo dpkg -i cloudflared.deb
+
+          sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}"
+
+          sudo apt-get update
+          sudo apt-get install -y fastfetch
+
+          for file in /root/.bashrc /home/runner/.bashrc; do
+            if ! grep -q 'fastfetch' "$file"; then
+              echo '
+          if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
+              fastfetch
+          fi' | sudo tee -a "$file" > /dev/null
+            fi
+          done
+
+          sudo tee /usr/local/bin/clear > /dev/null <<'EOF'
+          #!/bin/bash
+          /usr/bin/clear
+          fastfetch
+          EOF
+
+          sudo chmod +x /usr/local/bin/clear
+
+          if ! sudo tailscale debug prefs | grep -q 'RunSSH: true'; then
+            sudo tailscale set --ssh
+          fi
+
+      - name: Ubuntu Running
+        run: |
+          if [ "${{ inputs.sshx }}" = "Yes" ]; then
+            set -o pipefail
+
+            curl -sSf https://sshx.io/get | sh -s run 2>&1 |
+              grep --line-buffered -oE 'https://sshx\.io/s/[A-Za-z0-9]+(#[A-Za-z0-9]+)?'
+          else
+            curl -sSf https://sshx.io/get | sh -s run \
+              >/dev/null 2>&1
+          fi
