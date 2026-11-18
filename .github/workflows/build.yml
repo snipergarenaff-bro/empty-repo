@@ -1,4 +1,3 @@
-
 name: Linux Distro
 
 on:
@@ -60,7 +59,7 @@ jobs:
               curl \
               git \
               openssh-server \
-              fastfetch \
+              neofetch \
               procps \
               util-linux \
               hostname \
@@ -73,6 +72,7 @@ jobs:
           '
 
           docker exec -i debian bash <<'EOF'
+
           echo "root:root" | chpasswd
 
           sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -88,22 +88,24 @@ jobs:
           /usr/sbin/sshd
 
           cat >> /root/.bashrc <<'BASH'
-          PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]debian\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
+
+          PS1='\[\e[38;5;143m\]root\[\e[0m\]\[\e[38;5;110m\]@\[\e[0m\]\[\e[38;5;143m\]debian\[\e[0m\]:\[\e[38;5;186m\]\w\[\e[0m\] \[\e[38;5;143m\]#\[\e[0m\] '
 
           cd
 
-          if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
-              fastfetch
+          if [[ $- == *i* ]] && command -v neofetch >/dev/null 2>&1; then
+              neofetch
           fi
           BASH
 
           cat > /usr/local/bin/clear <<'BASH'
           #!/bin/bash
           /usr/bin/clear
-          fastfetch
+          neofetch
           BASH
 
           chmod +x /usr/local/bin/clear
+
           EOF
 
           docker exec debian bash -c '
@@ -144,6 +146,7 @@ jobs:
               https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 
             install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+
             cloudflared --version
           '
 
@@ -214,7 +217,8 @@ jobs:
           echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
 
           sudo tee -a /root/.bashrc > /dev/null <<'EOF'
-          PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]ubuntu\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
+
+          PS1='\[\e[38;5;143m\]root\[\e[0m\]\[\e[38;5;110m\]@\[\e[0m\]\[\e[38;5;143m\]ubuntu\[\e[0m\]:\[\e[38;5;186m\]\w\[\e[0m\] \[\e[38;5;143m\]#\[\e[0m\] '
           EOF
 
           curl -fsSL https://tailscale.com/install.sh | sh
@@ -231,13 +235,13 @@ jobs:
           sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}"
 
           sudo apt-get update
-          sudo apt-get install -y fastfetch
+          sudo apt-get install -y neofetch
 
           for file in /root/.bashrc /home/runner/.bashrc; do
-            if ! grep -q 'fastfetch' "$file"; then
+            if ! grep -q 'neofetch' "$file"; then
               echo '
-          if [[ $- == *i* ]] && command -v fastfetch >/dev/null 2>&1; then
-              fastfetch
+          if [[ $- == *i* ]] && command -v neofetch >/dev/null 2>&1; then
+              neofetch
           fi' | sudo tee -a "$file" > /dev/null
             fi
           done
@@ -245,7 +249,7 @@ jobs:
           sudo tee /usr/local/bin/clear > /dev/null <<'EOF'
           #!/bin/bash
           /usr/bin/clear
-          fastfetch
+          neofetch
           EOF
 
           sudo chmod +x /usr/local/bin/clear
