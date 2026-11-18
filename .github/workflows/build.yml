@@ -1,4 +1,5 @@
-name: Build Apk
+
+name: Linux Distro
 
 on:
   workflow_dispatch:
@@ -24,7 +25,7 @@ on:
 jobs:
   Debian:
     if: ${{ inputs.os == 'Debian' || inputs.os == 'Both' }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Initialize Debian
@@ -37,7 +38,7 @@ jobs:
             sudo chmod 600 /dev/net/tun
           fi
 
-          docker pull debian:13
+          docker pull debian:12
 
           docker run -d \
             --name debian \
@@ -47,7 +48,7 @@ jobs:
             --device=/dev/net/tun:/dev/net/tun \
             --sysctl net.ipv4.ip_forward=1 \
             --sysctl net.ipv6.conf.all.forwarding=1 \
-            debian:13 \
+            debian:12 \
             sleep infinity
 
           docker exec debian bash -c '
@@ -72,7 +73,6 @@ jobs:
           '
 
           docker exec -i debian bash <<'EOF'
-
           echo "root:root" | chpasswd
 
           sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -88,7 +88,6 @@ jobs:
           /usr/sbin/sshd
 
           cat >> /root/.bashrc <<'BASH'
-
           PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]debian\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
 
           cd
@@ -105,7 +104,6 @@ jobs:
           BASH
 
           chmod +x /usr/local/bin/clear
-
           EOF
 
           docker exec debian bash -c '
@@ -146,7 +144,6 @@ jobs:
               https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 
             install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-
             cloudflared --version
           '
 
@@ -197,7 +194,7 @@ jobs:
 
   Ubuntu:
     if: ${{ inputs.os == 'Ubuntu' || inputs.os == 'Both' }}
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Initialize Ubuntu
@@ -217,7 +214,6 @@ jobs:
           echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
 
           sudo tee -a /root/.bashrc > /dev/null <<'EOF'
-
           PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]ubuntu\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
           EOF
 
