@@ -1,17 +1,8 @@
-name: Linux Distro
+name: Ubuntu 22.04 LTS
 
 on:
   workflow_dispatch:
     inputs:
-      os:
-        description: Select Distribution
-        required: true
-        type: choice
-        default: Debian
-        options:
-          - Debian
-          - Ubuntu
-          - Both
       sshx:
         description: Enable SSHX Link Output
         required: true
@@ -22,186 +13,14 @@ on:
           - 'No'
 
 jobs:
-  Debian:
-    if: ${{ inputs.os == 'Debian' || inputs.os == 'Both' }}
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Initialize Debian
-        run: |
-          sudo modprobe tun || true
-
-          if [ ! -c /dev/net/tun ]; then
-            sudo mkdir -p /dev/net
-            sudo mknod /dev/net/tun c 10 200
-            sudo chmod 600 /dev/net/tun
-          fi
-
-          docker pull debian:12
-
-          docker run -d \
-            --name debian \
-            --hostname debian \
-            --cap-add=NET_ADMIN \
-            --cap-add=NET_RAW \
-            --device=/dev/net/tun:/dev/net/tun \
-            --sysctl net.ipv4.ip_forward=1 \
-            --sysctl net.ipv6.conf.all.forwarding=1 \
-            debian:12 \
-            sleep infinity
-
-          docker exec debian bash -c '
-            apt-get update
-
-            apt-get install -y \
-              sudo \
-              ca-certificates \
-              curl \
-              git \
-              openssh-server \
-              neofetch \
-              procps \
-              util-linux \
-              hostname \
-              gcc \
-              clang \
-              make \
-              ncurses-bin \
-              iptables \
-              iproute2
-          '
-
-          docker exec -i debian bash <<'EOF'
-
-          echo "root:root" | chpasswd
-
-          sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-
-          echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-          echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-
-          ssh-keygen -A
-
-          mkdir -p /run/sshd
-          sshd -t
-          /usr/sbin/sshd
-
-          cat >> /root/.bashrc <<'BASH'
-
-          PS1='\[\e[38;5;143m\]root\[\e[0m\]\[\e[38;5;110m\]@\[\e[0m\]\[\e[38;5;143m\]debian\[\e[0m\]:\[\e[38;5;186m\]\w\[\e[0m\] \[\e[38;5;143m\]#\[\e[0m\] '
-
-          cd
-
-          if [[ $- == *i* ]] && command -v neofetch >/dev/null 2>&1; then
-              neofetch
-          fi
-          BASH
-
-          cat > /usr/local/bin/clear <<'BASH'
-          #!/bin/bash
-          /usr/bin/clear
-          neofetch
-          BASH
-
-          chmod +x /usr/local/bin/clear
-
-          EOF
-
-          docker exec debian bash -c '
-            curl -fsSL https://tailscale.com/install.sh | sh
-          '
-
-          docker exec debian bash -c '
-            mkdir -p /var/lib/tailscale
-            mkdir -p /var/run/tailscale
-
-            nohup /usr/sbin/tailscaled \
-              --state=/var/lib/tailscale/tailscaled.state \
-              --socket=/var/run/tailscale/tailscaled.sock \
-              > /var/log/tailscaled.log 2>&1 &
-
-            for i in $(seq 1 30); do
-              if [ -S /var/run/tailscale/tailscaled.sock ]; then
-                break
-              fi
-              sleep 1
-            done
-
-            test -S /var/run/tailscale/tailscaled.sock
-          '
-
-          docker exec \
-            -e TAILSCALE_AUTH_KEY="${{ secrets.TAILSCALE_AUTH_KEY }}" \
-            debian bash -c '
-              tailscale --socket=/var/run/tailscale/tailscaled.sock up \
-                --auth-key="$TAILSCALE_AUTH_KEY" \
-                --advertise-exit-node
-
-              tailscale --socket=/var/run/tailscale/tailscaled.sock set --ssh
-            '
-
-          docker exec debian bash -c '
-            curl -L --fail --output /tmp/cloudflared \
-              https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-
-            install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
-
-            cloudflared --version
-          '
-
-          docker exec \
-            -e CLOUDFLARED_TUNNEL_TOKEN="${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}" \
-            debian bash -c '
-              nohup cloudflared tunnel \
-                --no-autoupdate \
-                run \
-                --token "$CLOUDFLARED_TUNNEL_TOKEN" \
-                > /var/log/cloudflared.log 2>&1 &
-            '
-
-          docker exec debian bash -c '
-            echo "========== TAILSCALE STATUS =========="
-            tailscale status
-
-            echo ""
-            echo "========== TAILSCALE IP =========="
-            tailscale ip -4
-
-            echo ""
-            echo "========== EXIT NODE CONFIGURATION =========="
-            tailscale debug prefs
-
-            echo ""
-            echo "========== CLOUDFLARED PROCESS =========="
-            pgrep -a cloudflared || true
-
-            echo ""
-            echo "========== SSH PROCESS =========="
-            pgrep -a sshd || true
-          '
-
-      - name: Debian Running
-        run: |
-          if [ "${{ inputs.sshx }}" = "Yes" ]; then
-            set -o pipefail
-
-            docker exec debian bash -lc \
-              'curl -sSf https://sshx.io/get | sh -s run' 2>&1 |
-              grep --line-buffered -oE 'https://sshx\.io/s/[A-Za-z0-9]+(#[A-Za-z0-9]+)?'
-          else
-            docker exec debian bash -lc \
-              'curl -sSf https://sshx.io/get | sh -s run' \
-              >/dev/null 2>&1
-          fi
-
   Ubuntu:
-    if: ${{ inputs.os == 'Ubuntu' || inputs.os == 'Both' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Initialize Ubuntu
         run: |
+          exec >/dev/null 2>&1
+
           echo "root:root" | sudo chpasswd
 
           sudo hostnamectl set-hostname ubuntu
@@ -217,46 +36,48 @@ jobs:
           echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
 
           sudo tee -a /root/.bashrc > /dev/null <<'EOF'
-
-          PS1='\[\e[38;5;143m\]root\[\e[0m\]\[\e[38;5;110m\]@\[\e[0m\]\[\e[38;5;143m\]ubuntu\[\e[0m\]:\[\e[38;5;186m\]\w\[\e[0m\] \[\e[38;5;143m\]#\[\e[0m\] '
+          PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]ubuntu\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
           EOF
 
-          curl -fsSL https://tailscale.com/install.sh | sh
+          # Install Tailscale
+          curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1
 
           sudo tailscale up \
             --auth-key="${{ secrets.TAILSCALE_AUTH_KEY }}" \
-            --advertise-exit-node
+            --advertise-exit-node >/dev/null 2>&1
 
-          curl -L --output cloudflared.deb \
-            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo tailscale set --ssh >/dev/null 2>&1
 
-          sudo dpkg -i cloudflared.deb
+          # Install Cloudflared
+          curl -fsSL -o cloudflared.deb \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
+            >/dev/null 2>&1
 
-          sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}"
+          sudo dpkg -i cloudflared.deb >/dev/null 2>&1
 
-          sudo apt-get update
-          sudo apt-get install -y neofetch
+          sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}" \
+            >/dev/null 2>&1
+
+          # Install Neofetch
+          sudo apt-get update >/dev/null 2>&1
+          sudo apt-get install -y neofetch >/dev/null 2>&1
 
           for file in /root/.bashrc /home/runner/.bashrc; do
             if ! grep -q 'neofetch' "$file"; then
               echo '
           if [[ $- == *i* ]] && command -v neofetch >/dev/null 2>&1; then
               neofetch
-          fi' | sudo tee -a "$file" > /dev/null
+          fi' | sudo tee -a "$file" >/dev/null
             fi
           done
 
-          sudo tee /usr/local/bin/clear > /dev/null <<'EOF'
+          sudo tee /usr/local/bin/clear >/dev/null <<'EOF'
           #!/bin/bash
           /usr/bin/clear
           neofetch
           EOF
 
           sudo chmod +x /usr/local/bin/clear
-
-          if ! sudo tailscale debug prefs | grep -q 'RunSSH: true'; then
-            sudo tailscale set --ssh
-          fi
 
       - name: Ubuntu Running
         run: |
