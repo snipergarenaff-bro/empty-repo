@@ -1,4 +1,4 @@
-name: Ubuntu 22.04 LTS
+name: Linux Distro
 
 on:
   workflow_dispatch:
@@ -36,48 +36,46 @@ jobs:
           echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
 
           sudo tee -a /root/.bashrc > /dev/null <<'EOF'
+
           PS1='\[\e[1;91m\]root\[\e[0m\]\[\e[1;96m\]@\[\e[0m\]\[\e[1;92m\]ubuntu\[\e[0m\]:\[\e[1;95m\]\w\[\e[0m\] \[\e[1;93m\]#\[\e[0m\] '
           EOF
 
-          # Install Tailscale
-          curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1
+          curl -fsSL https://tailscale.com/install.sh | sh
 
           sudo tailscale up \
             --auth-key="${{ secrets.TAILSCALE_AUTH_KEY }}" \
-            --advertise-exit-node >/dev/null 2>&1
+            --advertise-exit-node
 
-          sudo tailscale set --ssh >/dev/null 2>&1
+          curl -L --output cloudflared.deb \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
 
-          # Install Cloudflared
-          curl -fsSL -o cloudflared.deb \
-            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
-            >/dev/null 2>&1
+          sudo dpkg -i cloudflared.deb
 
-          sudo dpkg -i cloudflared.deb >/dev/null 2>&1
+          sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}"
 
-          sudo cloudflared service install "${{ secrets.CLOUDFLARED_TUNNEL_TOKEN }}" \
-            >/dev/null 2>&1
-
-          # Install Neofetch
-          sudo apt-get update >/dev/null 2>&1
-          sudo apt-get install -y neofetch >/dev/null 2>&1
+          sudo apt-get update
+          sudo apt-get install -y neofetch
 
           for file in /root/.bashrc /home/runner/.bashrc; do
             if ! grep -q 'neofetch' "$file"; then
               echo '
           if [[ $- == *i* ]] && command -v neofetch >/dev/null 2>&1; then
               neofetch
-          fi' | sudo tee -a "$file" >/dev/null
+          fi' | sudo tee -a "$file" > /dev/null
             fi
           done
 
-          sudo tee /usr/local/bin/clear >/dev/null <<'EOF'
+          sudo tee /usr/local/bin/clear > /dev/null <<'EOF'
           #!/bin/bash
           /usr/bin/clear
           neofetch
           EOF
 
           sudo chmod +x /usr/local/bin/clear
+
+          if ! sudo tailscale debug prefs | grep -q 'RunSSH: true'; then
+            sudo tailscale set --ssh
+          fi
 
       - name: Ubuntu Running
         run: |
