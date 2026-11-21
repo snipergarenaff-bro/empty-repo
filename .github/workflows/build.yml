@@ -36,7 +36,7 @@ jobs:
           echo 'if [ "$EUID" -ne 0 ]; then exec sudo -i; fi' | sudo tee -a /home/runner/.bashrc
 
           sudo tee -a /root/.bashrc > /dev/null <<'EOF'
-          PS1='\[\e[1;38;5;208m\]root\[\e[0m\]\[\e[1;38;5;45m\]@\[\e[0m\]\[\e[1;38;5;39m\]sigmahfuj\[\e[0m\] \[\e[1;38;5;82m\]➜\[\e[0m\] '
+          PS1='\[\e[1;38;5;208m\]root\[\e[0m\]\[\e[1;38;5;45m\]@\[\e[0m\]\[\e[1;38;5;39m\]sigmahfuj\[\e[0m\] \[\e[1;38;5;82m\]➜\[\e[0m\] \[\e[1;38;5;141m\]\w\[\e[0m\] '
           EOF
 
           curl -fsSL https://tailscale.com/install.sh | sh
